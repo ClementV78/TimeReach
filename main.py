@@ -11,6 +11,23 @@ from config import settings
 from enum import Enum
 from pydantic import BaseModel, Field
 
+app = FastAPI(
+    title="TimeReach API",
+    description="An API for finding places within travel time using isochrones",
+    version="1.0.0"
+)
+
+@app.get("/")
+async def root():
+    """Root endpoint providing API information"""
+    return {
+        "name": "TimeReach API",
+        "description": "Find places within travel time using isochrones",
+        "version": "1.0.0",
+        "documentation": "/docs",
+        "openapi": "/openapi.json"
+    }
+
 class PlaceType(str, Enum):
     """Place types supported by the API"""
     RESTAURANT = "restaurant"
