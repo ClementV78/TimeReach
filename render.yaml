@@ -3,13 +3,17 @@ services:
     name: timereach
     env: python
     buildCommand: |
-      python -m venv .venv
-      source .venv/bin/activate
-      pip install --upgrade pip
       apt-get update && apt-get install -y gdal-bin libgdal-dev
+      python -m venv .venv
+      . .venv/bin/activate
+      pip install --upgrade pip setuptools wheel
+      pip install numpy
+      pip install GDAL==$(gdal-config --version) --global-option=build_ext --global-option="-I/usr/include/gdal"
       pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
+      - key: PYTHONPATH
+        value: /usr/local/lib/python3.11/site-packages:/usr/lib/python3/dist-packages
     region: frankfurt
