@@ -21,17 +21,47 @@ def custom_openapi():
         title="TimeReach API",
         version="1.0.0",
         description="""
-        API for finding places within a specified travel time using isochrones.
-        
-        ChatGPT Integration:
-        1. Input format: lat=48.8566,lon=2.3522
-        2. Travel time in minutes: 1-60
-        3. Supported types: restaurant, cafe, bar, fast_food_restaurant, bakery, any
-        4. Optional keyword filtering
-        
-        ChatGPT Example:
-        "Find restaurants within 20 minutes of the Eiffel Tower"
-        → /restaurants?lat=48.8584&lon=2.2945&minutes=20
+        🌍 TimeReach API - Find Places Within Travel Time
+
+        This API helps find places (restaurants, cafes, bars, etc.) that are reachable within a specific travel time from a starting point. It uses isochrones to determine the reachable area and then searches for places within that area.
+
+        🤖 ChatGPT Integration Guide:
+
+        1. Base Endpoint: https://timereach.onrender.com
+
+        2. Main Parameters:
+           - lat: Latitude (-90 to 90)
+           - lon: Longitude (-180 to 180)
+           - minutes: Travel time (1-60 minutes)
+           - type: Place type (restaurant, cafe, bar, fast_food_restaurant, bakery, any)
+           - keyword: Optional search term
+
+        3. Common Use Cases:
+           "Find restaurants within 20 minutes of the Eiffel Tower"
+           → /restaurants?lat=48.8584&lon=2.2945&minutes=20
+
+           "Find cafes within 15 minutes of Central Park"
+           → /restaurants?lat=40.7829&lon=-73.9654&minutes=15&type=cafe
+
+           "Find bakeries near Notre Dame Paris"
+           → /restaurants?lat=48.8529&lon=2.3499&minutes=10&type=bakery
+
+        4. Response Format:
+           - average_radius: Reachable distance in meters
+           - places: Array of found locations with:
+             * name: Place name
+             * address: Full address
+             * rating: Rating out of 5
+             * location: {lat, lng}
+             * types: Place categories
+             * price_level: Price category
+             * description: Place description
+
+        5. Error Handling:
+           - 503: External service unavailable
+           - 422: Invalid parameters
+
+        For testing: Try the interactive docs at /docs
         """,
         routes=app.routes,
     )
@@ -89,35 +119,6 @@ class SearchResponse(BaseModel):
     """API response model"""
     average_radius: int = Field(..., description="Average reachable radius in meters")
     places: List[Place] = Field(..., description="List of found places")
-
-def custom_openapi():
-    """Customize OpenAPI documentation for ChatGPT"""
-    if app.openapi_schema:
-        return app.openapi_schema
-    openapi_schema = get_openapi(
-        title="TimeReach API",
-        version="1.0.0",
-        description="""
-        API for finding places within a specified travel time using isochrones.
-        
-        ChatGPT Integration:
-        1. Input format: lat=48.8566,lon=2.3522
-        2. Travel time in minutes: 1-60
-        3. Supported types: restaurant, cafe, bar, fast_food_restaurant, bakery, any
-        4. Optional keyword filtering
-        
-        ChatGPT Example:
-        "Find restaurants within 20 minutes of the Eiffel Tower"
-        → /restaurants?lat=48.8584&lon=2.2945&minutes=20
-        
-        Responses include:
-        - Average reachable radius
-        - List of places with details (name, address, rating, etc.)
-        """,
-        routes=app.routes,
-    )
-    app.openapi_schema = openapi_schema
-    return app.openapi_schema
 
 # CORS middleware configuration already applied above
 
