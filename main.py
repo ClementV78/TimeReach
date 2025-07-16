@@ -20,6 +20,7 @@ def custom_openapi():
     openapi_schema = get_openapi(
         title="TimeReach API",
         version="1.0.0",
+        servers=[{"url": "https://timereach.onrender.com"}],
         description="""
         🌍 TimeReach API - Find Places Within Travel Time
 
