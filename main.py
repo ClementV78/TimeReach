@@ -39,13 +39,13 @@ def custom_openapi():
 
         3. Common Use Cases:
            "Find restaurants within 20 minutes of the Eiffel Tower"
-           → /restaurants?lat=48.8584&lon=2.2945&minutes=20
+           → /places?lat=48.8584&lon=2.2945&minutes=20
 
            "Find cafes within 15 minutes of Central Park"
-           → /restaurants?lat=40.7829&lon=-73.9654&minutes=15&type=cafe
+           → /places?lat=40.7829&lon=-73.9654&minutes=15&type=cafe
 
            "Find bakeries near Notre Dame Paris"
-           → /restaurants?lat=48.8529&lon=2.3499&minutes=10&type=bakery
+           → /places?lat=48.8529&lon=2.3499&minutes=10&type=bakery
 
         4. Response Format:
            - average_radius: Reachable distance in meters
@@ -123,7 +123,8 @@ class SearchResponse(BaseModel):
 
 # CORS middleware configuration already applied above
 
-@app.get("/restaurants", 
+@app.get("/places", 
+         operation_id="find_places",
          summary="Find places within a reachable area",
          response_description="List of places and average radius",
          response_model=SearchResponse,
@@ -159,7 +160,7 @@ class SearchResponse(BaseModel):
                  }
              }
          })
-async def find_restaurants(
+async def find_places(
     lon: float = Query(..., ge=-180, le=180, description="Starting point longitude"),
     lat: float = Query(..., ge=-90, le=90, description="Starting point latitude"),
     minutes: int = Query(20, ge=1, le=60, description="Travel time in minutes"),
