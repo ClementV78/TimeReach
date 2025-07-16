@@ -11,11 +11,34 @@ from config import settings
 from enum import Enum
 from pydantic import BaseModel, Field
 
-app = FastAPI(
-    title="TimeReach API",
-    description="An API for finding places within travel time using isochrones",
-    version="1.0.0"
-)
+app = FastAPI()
+
+def custom_openapi():
+    """Customize OpenAPI documentation for ChatGPT"""
+    if app.openapi_schema:
+        return app.openapi_schema
+    openapi_schema = get_openapi(
+        title="TimeReach API",
+        version="1.0.0",
+        description="""
+        API for finding places within a specified travel time using isochrones.
+        
+        ChatGPT Integration:
+        1. Input format: lat=48.8566,lon=2.3522
+        2. Travel time in minutes: 1-60
+        3. Supported types: restaurant, cafe, bar, fast_food_restaurant, bakery, any
+        4. Optional keyword filtering
+        
+        ChatGPT Example:
+        "Find restaurants within 20 minutes of the Eiffel Tower"
+        → /restaurants?lat=48.8584&lon=2.2945&minutes=20
+        """,
+        routes=app.routes,
+    )
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
 
 @app.get("/")
 async def root():
@@ -27,6 +50,15 @@ async def root():
         "documentation": "/docs",
         "openapi": "/openapi.json"
     }
+
+# CORS middleware configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class PlaceType(str, Enum):
     """Place types supported by the API"""
@@ -87,17 +119,7 @@ def custom_openapi():
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 
-app = FastAPI()
-app.openapi = custom_openapi
-
-# CORS middleware configuration
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS middleware configuration already applied above
 
 @app.get("/restaurants", 
          summary="Find places within a reachable area",
