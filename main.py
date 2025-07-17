@@ -15,7 +15,7 @@ app = FastAPI(
     title="TimeReach API",
     description="Find places within travel time using isochrones",
     version="1.0.0",
-    openapi_version="3.0.2",
+    openapi_version="3.0.0",
     openapi_tags=[{
         "name": "Places",
         "description": "Operations for finding places within travel time"
@@ -35,6 +35,7 @@ def custom_openapi():
     openapi_schema = get_openapi(
         title="TimeReach API",
         version="1.0.0",
+        openapi_version="3.0.0",
         servers=[{"url": "https://timereach.onrender.com"}],
         description="""
         🌍 TimeReach API - Find Places Within Travel Time
@@ -134,13 +135,13 @@ class Location(BaseModel):
 class Place(BaseModel):
     """Place model"""
     name: str = Field(..., description="Place name")
-    address: Optional[str] = Field(default=None, description="Formatted address")
-    rating: Optional[float] = Field(default=None, description="Average rating out of 5")
+    address: str = Field("", description="Formatted address")
+    rating: float = Field(0.0, description="Average rating out of 5")
     location: Location = Field(..., description="Geographic coordinates")
     place_id: str = Field(..., description="Unique Google Places identifier")
     types: List[str] = Field(default_factory=list, description="Place types")
-    price_level: Optional[str] = Field(default=None, description="Price level")
-    description: Optional[str] = Field(default=None, description="Editorial description")
+    price_level: str = Field("", description="Price level")
+    description: str = Field("", description="Editorial description")
 
 class SearchResponse(BaseModel):
     """API response model"""
