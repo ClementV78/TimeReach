@@ -1,3 +1,17 @@
+from fastapi import FastAPI, Query, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.openapi.utils import get_openapi
+from shapely.geometry import shape, Point
+import requests
+from geopy.distance import geodesic
+from typing import Optional, List, Dict, Union
+from config import settings
+from enum import Enum
+from pydantic import BaseModel, Field
+import logging
+from datetime import datetime
+
 # Endpoint GET /places_test compatible OpenAPI 3.0.3
 
 # ...existing code...
