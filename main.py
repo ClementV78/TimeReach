@@ -11,7 +11,16 @@ from config import settings
 from enum import Enum
 from pydantic import BaseModel, Field
 
-app = FastAPI()
+app = FastAPI(
+    title="TimeReach API",
+    description="Find places within travel time using isochrones",
+    version="1.0.0",
+    terms_of_service="https://timereach.onrender.com/terms",
+    contact={
+        "name": "TimeReach API Support",
+        "url": "https://timereach.onrender.com/support",
+    }
+)
 
 def custom_openapi():
     """Customize OpenAPI documentation for ChatGPT"""
@@ -134,16 +143,42 @@ class SearchResponse(BaseModel):
 
 # CORS middleware configuration already applied above
 
-@app.options("/places")
-async def places_options():
-    """Handle OPTIONS requests for CORS"""
-    return {"methods": ["GET", "OPTIONS"]}
-
 @app.get("/places", 
          operation_id="find_places",
+         tags=["Places"],
          summary="Find places within a reachable area",
          response_description="List of places and average radius",
          response_model=SearchResponse,
+         responses={
+             200: {
+                 "description": "Successfully found places within travel time",
+                 "content": {
+                     "application/json": {
+                         "example": {
+                             "average_radius": 5000,
+                             "places": [
+                                 {
+                                     "name": "Le Bistrot Parisien",
+                                     "address": "12 Avenue des Champs-Élysées, 75008 Paris, France",
+                                     "rating": 4.5,
+                                     "location": {"lat": 48.8584, "lng": 2.2945},
+                                     "place_id": "ChIJxxx...",
+                                     "types": ["restaurant", "french_restaurant"],
+                                     "price_level": "PRICE_LEVEL_MODERATE",
+                                     "description": "Traditional French bistro with Eiffel Tower views"
+                                 }
+                             ]
+                         }
+                     }
+                 }
+             },
+             422: {
+                 "description": "Validation Error - Invalid parameters provided"
+             },
+             503: {
+                 "description": "External service unavailable"
+             }
+         },
          responses={
              200: {
                  "description": "Search successful",
@@ -187,11 +222,37 @@ async def places_options():
              }
          })
 async def find_places(
-    lon: float = Query(..., ge=-180, le=180, description="Starting point longitude"),
-    lat: float = Query(..., ge=-90, le=90, description="Starting point latitude"),
-    minutes: int = Query(20, ge=1, le=60, description="Travel time in minutes"),
-    type: PlaceType = Query(PlaceType.RESTAURANT, description="Type of place to search for"),
-    keyword: Optional[str] = Query(None, description="Keyword to filter results")
+    lon: float = Query(
+        ...,
+        ge=-180,
+        le=180,
+        description="Starting point longitude",
+        example=2.2945
+    ),
+    lat: float = Query(
+        ...,
+        ge=-90,
+        le=90,
+        description="Starting point latitude",
+        example=48.8584
+    ),
+    minutes: int = Query(
+        20,
+        ge=1,
+        le=60,
+        description="Travel time in minutes",
+        example=20
+    ),
+    type: PlaceType = Query(
+        PlaceType.RESTAURANT,
+        description="Type of place to search for",
+        example="restaurant"
+    ),
+    keyword: Optional[str] = Query(
+        None,
+        description="Keyword to filter results",
+        example="bistro"
+    )
 ):
     """
     Find places within a specified travel time using isochrones.
