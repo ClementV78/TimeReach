@@ -12,109 +12,6 @@ from pydantic import BaseModel, Field
 import logging
 from datetime import datetime
 
-# Endpoint GET /places_test compatible OpenAPI 3.0.3
-
-# ...existing code...
-
-# Place this endpoint after app = FastAPI(...)
-
-# ...existing code...
-
-# After app = FastAPI(...)
-
-app = FastAPI(
-    title="TimeReach API",
-    description="Find places within travel time using isochrones",
-    version="1.0.0",
-    openapi_version="3.1.0",
-    openapi_tags=[{
-        "name": "Places",
-        "description": "Operations for finding places within travel time"
-    }],
-    terms_of_service="https://timereach.onrender.com/terms",
-    contact={
-        "name": "TimeReach API Support",
-        "url": "https://timereach.onrender.com/support",
-    },
-    swagger_ui_parameters={"defaultModelsExpandDepth": -1}
-)
-
-@app.get("/places_test", tags=["Places"], summary="Test endpoint for OpenAPI 3.0.3 compatibility", description="Returns a static example response compatible with OpenAPI 3.0.3.")
-async def places_test():
-    """
-    Test endpoint for OpenAPI 3.0.3 compatibility. Returns a static response.
-    """
-    example_response = {
-        "average_radius": 5000,
-        "places": [
-            {
-                "name": "Le Bistrot Parisien",
-                "address": "12 Avenue des Champs-Élysées, 75008 Paris, France",
-                "rating": 4.5,
-                "location": {"lat": 48.8584, "lng": 2.2945},
-                "place_id": "ChIJxxx...",
-                "types": ["restaurant", "french_restaurant"],
-                "price_level": "PRICE_LEVEL_MODERATE",
-                "description": "Traditional French bistro with Eiffel Tower views"
-            }
-        ]
-    }
-    return JSONResponse(content=example_response)
-# Endpoint GET /places_test compatible OpenAPI 3.0.3
-
-
-# ...existing code...
-
-# Endpoint GET /places_test compatible OpenAPI 3.0.3
-from fastapi.responses import JSONResponse
-
-# Place this endpoint after app = FastAPI(...)
-
-
-# ...existing code...
-
-# Place this endpoint after app = FastAPI(...)
-
-# ...existing code...
-
-# After app = FastAPI(...)
-
-@app.get("/places_test", tags=["Places"], summary="Test endpoint for OpenAPI 3.0.3 compatibility", description="Returns a static example response compatible with OpenAPI 3.0.3.")
-async def places_test():
-    """
-    Test endpoint for OpenAPI 3.0.3 compatibility. Returns a static response.
-    """
-    example_response = {
-        "average_radius": 5000,
-        "places": [
-            {
-                "name": "Le Bistrot Parisien",
-                "address": "12 Avenue des Champs-Élysées, 75008 Paris, France",
-                "rating": 4.5,
-                "location": {"lat": 48.8584, "lng": 2.2945},
-                "place_id": "ChIJxxx...",
-                "types": ["restaurant", "french_restaurant"],
-                "price_level": "PRICE_LEVEL_MODERATE",
-                "description": "Traditional French bistro with Eiffel Tower views"
-            }
-        ]
-    }
-    return JSONResponse(content=example_response)
-# main.py
-from fastapi import FastAPI, Query, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from fastapi.openapi.utils import get_openapi
-from shapely.geometry import shape, Point
-import requests
-from geopy.distance import geodesic
-from typing import Optional, List, Dict, Union
-from config import settings
-from enum import Enum
-from pydantic import BaseModel, Field
-import logging
-from datetime import datetime
-
 # Configuration des logs
 logging.basicConfig(
     level=logging.DEBUG,
@@ -129,7 +26,7 @@ app = FastAPI(
     title="TimeReach API",
     description="Find places within travel time using isochrones",
     version="1.0.0",
-    openapi_version="3.1.0",
+    openapi_version="3.0.3",
     openapi_tags=[{
         "name": "Places",
         "description": "Operations for finding places within travel time"
@@ -149,7 +46,7 @@ def custom_openapi():
     openapi_schema = get_openapi(
         title="TimeReach API",
         version="1.0.0",
-        openapi_version="3.1.0",
+        openapi_version="3.0.3",
         servers=[{"url": "https://timereach.onrender.com"}],
         description="""
         # TimeReach API - Find Places Within Travel Time
@@ -230,6 +127,28 @@ def custom_openapi():
 
 app.openapi = custom_openapi
 
+@app.get("/places_test", tags=["Places"], summary="Test endpoint for OpenAPI 3.0.3 compatibility", description="Returns a static example response compatible with OpenAPI 3.0.3.")
+async def places_test():
+    """
+    Test endpoint for OpenAPI 3.0.3 compatibility. Returns a static response.
+    """
+    example_response = {
+        "average_radius": 5000,
+        "places": [
+            {
+                "name": "Le Bistrot Parisien",
+                "address": "12 Avenue des Champs-Élysées, 75008 Paris, France",
+                "rating": 4.5,
+                "location": {"lat": 48.8584, "lng": 2.2945},
+                "place_id": "ChIJxxx...",
+                "types": ["restaurant", "french_restaurant"],
+                "price_level": "PRICE_LEVEL_MODERATE",
+                "description": "Traditional French bistro with Eiffel Tower views"
+            }
+        ]
+    }
+    return JSONResponse(content=example_response)
+
 @app.get("/")
 async def root():
     """Root endpoint providing API information"""
@@ -280,22 +199,20 @@ class Location(BaseModel):
     lng: float = Field(..., ge=-180, le=180, description="Longitude")
 
 class Place(BaseModel):
-    """Place model"""
+    """Place model compatible with OpenAPI 3.0.3"""
     name: str = Field(..., description="Place name")
     address: str = Field("", description="Formatted address")
-    rating: Optional[float] = Field(None, description="Average rating out of 5")
+    rating: float = Field(0.0, description="Average rating out of 5")
     location: Location = Field(..., description="Geographic coordinates")
     place_id: str = Field(..., description="Unique Google Places identifier")
     types: List[str] = Field(default_factory=list, description="Place types")
-    price_level: Optional[str] = Field(None, description="Price level")
-    description: Optional[str] = Field(None, description="Editorial description")
+    price_level: str = Field("", description="Price level")
+    description: str = Field("", description="Editorial description")
 
 class SearchResponse(BaseModel):
     """API response model"""
     average_radius: int = Field(..., description="Average reachable radius in meters")
     places: List[Place] = Field(..., description="List of found places")
-
-# CORS middleware configuration already applied above
 
 @app.get("/places", 
          operation_id="find_places",
@@ -320,16 +237,6 @@ class SearchResponse(BaseModel):
                                      "types": ["restaurant", "french_restaurant"],
                                      "price_level": "PRICE_LEVEL_MODERATE",
                                      "description": "Traditional French bistro with Eiffel Tower views"
-                                 },
-                                 {
-                                     "name": "Café de Paris",
-                                     "address": "10 Rue de la Paix, 75002 Paris, France",
-                                     "rating": 4.2,
-                                     "location": {"lat": 48.8566, "lng": 2.3522},
-                                     "place_id": "ChIJyyy...",
-                                     "types": ["cafe", "restaurant"],
-                                     "price_level": "PRICE_LEVEL_EXPENSIVE",
-                                     "description": "Historic Parisian café serving French cuisine"
                                  }
                              ]
                          }
@@ -390,12 +297,11 @@ async def find_places(
         min_length=2,
         max_length=50
     ),
-    keyword: Optional[str] = Query(
-        None,
+    keyword: str = Query(
+        "",
         description="Optional keyword to filter results (e.g., 'bistro', 'pizza', etc.)",
         example="bistro",
         title="Search Keyword",
-        min_length=2,
         max_length=50,
         regex="^[a-zA-Z0-9 ]*$"
     )
@@ -407,7 +313,7 @@ async def find_places(
     - Calculates average radius from the isochrone polygon
     - Searches for places using Google Places API
     """
-    logger.info(f"[LOG] /places endpoint called (GET or POST)")
+    logger.info(f"[LOG] /places endpoint called (GET)")
     # Dump requête utilisateur
     logger.debug(f"[API Request] location={location}, lat={lat}, lon={lon}, minutes={minutes}, mode={mode}, type={type}, keyword={keyword}")
     # Verify that either location or coordinates are provided
@@ -481,6 +387,7 @@ async def find_places(
         logger.error(f"[ORS Isochrone] Exception: {str(e)}")
         logger.info("==========================================================================\n")
         raise HTTPException(status_code=503, detail="Error accessing OpenRouteService API")
+    
     # 2. Rayon moyen
     center = Point(lon, lat)
     distances = [geodesic((center.y, center.x), (p[1], p[0])).meters for p in poly.exterior.coords]
@@ -510,7 +417,6 @@ async def find_places(
             },
             "includedType": type,
             "strictTypeFiltering": True,
-            # "priceLevels": ["PRICE_LEVEL_MODERATE", "PRICE_LEVEL_EXPENSIVE"] # à adapter si paramètre prix
         }
         logger.info("\n==================== [CALL] Google Places Text Search API ====================")
         logger.info(f"Request: textQuery={text_query}, type={type}, lat={lat}, lon={lon}, radius={average_radius}m")
@@ -543,15 +449,15 @@ async def find_places(
                 {
                     "name": p.get("displayName", {}).get("text", "Unknown"),
                     "address": p.get("formattedAddress", ""),
-                    "rating": float(p.get("rating", {}).get("rating")) if isinstance(p.get("rating"), dict) and p.get("rating", {}).get("rating") is not None else p.get("rating", None),
+                    "rating": float(p.get("rating", 0.0)) if p.get("rating") else 0.0,
                     "location": {
                         "lat": float(p.get("location", {}).get("latitude", 0)),
                         "lng": float(p.get("location", {}).get("longitude", 0))
                     },
                     "place_id": p.get("id", ""),
                     "types": p.get("types", []),
-                    "price_level": p.get("priceLevel") if p.get("priceLevel") else None,
-                    "description": p.get("editorialSummary", {}).get("text") if p.get("editorialSummary") else None
+                    "price_level": p.get("priceLevel", ""),
+                    "description": p.get("editorialSummary", {}).get("text", "") if p.get("editorialSummary") else ""
                 }
                 for p in response_data.get("places", [])[:20]
             ]
@@ -565,4 +471,3 @@ async def find_places(
             except:
                 error_message += f" - Status: {e.response.status_code}"
         raise HTTPException(status_code=503, detail=error_message)
-
