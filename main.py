@@ -1,5 +1,53 @@
 # Endpoint GET /places_test compatible OpenAPI 3.0.3
 
+# ...existing code...
+
+# Place this endpoint after app = FastAPI(...)
+
+# ...existing code...
+
+# After app = FastAPI(...)
+
+app = FastAPI(
+    title="TimeReach API",
+    description="Find places within travel time using isochrones",
+    version="1.0.0",
+    openapi_version="3.1.0",
+    openapi_tags=[{
+        "name": "Places",
+        "description": "Operations for finding places within travel time"
+    }],
+    terms_of_service="https://timereach.onrender.com/terms",
+    contact={
+        "name": "TimeReach API Support",
+        "url": "https://timereach.onrender.com/support",
+    },
+    swagger_ui_parameters={"defaultModelsExpandDepth": -1}
+)
+
+@app.get("/places_test", tags=["Places"], summary="Test endpoint for OpenAPI 3.0.3 compatibility", description="Returns a static example response compatible with OpenAPI 3.0.3.")
+async def places_test():
+    """
+    Test endpoint for OpenAPI 3.0.3 compatibility. Returns a static response.
+    """
+    example_response = {
+        "average_radius": 5000,
+        "places": [
+            {
+                "name": "Le Bistrot Parisien",
+                "address": "12 Avenue des Champs-Élysées, 75008 Paris, France",
+                "rating": 4.5,
+                "location": {"lat": 48.8584, "lng": 2.2945},
+                "place_id": "ChIJxxx...",
+                "types": ["restaurant", "french_restaurant"],
+                "price_level": "PRICE_LEVEL_MODERATE",
+                "description": "Traditional French bistro with Eiffel Tower views"
+            }
+        ]
+    }
+    return JSONResponse(content=example_response)
+# Endpoint GET /places_test compatible OpenAPI 3.0.3
+
 
 # ...existing code...
 
@@ -7,6 +55,15 @@
 from fastapi.responses import JSONResponse
 
 # Place this endpoint after app = FastAPI(...)
+
+
+# ...existing code...
+
+# Place this endpoint after app = FastAPI(...)
+
+# ...existing code...
+
+# After app = FastAPI(...)
 
 @app.get("/places_test", tags=["Places"], summary="Test endpoint for OpenAPI 3.0.3 compatibility", description="Returns a static example response compatible with OpenAPI 3.0.3.")
 async def places_test():
