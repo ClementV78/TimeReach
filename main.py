@@ -15,11 +15,17 @@ app = FastAPI(
     title="TimeReach API",
     description="Find places within travel time using isochrones",
     version="1.0.0",
+    openapi_version="3.1.0",
+    openapi_tags=[{
+        "name": "Places",
+        "description": "Operations for finding places within travel time"
+    }],
     terms_of_service="https://timereach.onrender.com/terms",
     contact={
         "name": "TimeReach API Support",
         "url": "https://timereach.onrender.com/support",
-    }
+    },
+    swagger_ui_parameters={"defaultModelsExpandDepth": -1}
 )
 
 def custom_openapi():
@@ -147,38 +153,8 @@ class SearchResponse(BaseModel):
          operation_id="find_places",
          tags=["Places"],
          summary="Find places within a reachable area",
-         response_description="List of places and average radius",
+         description="Search for places (restaurants, cafes, etc.) that are reachable within a specified travel time from a starting point",
          response_model=SearchResponse,
-         responses={
-             200: {
-                 "description": "Successfully found places within travel time",
-                 "content": {
-                     "application/json": {
-                         "example": {
-                             "average_radius": 5000,
-                             "places": [
-                                 {
-                                     "name": "Le Bistrot Parisien",
-                                     "address": "12 Avenue des Champs-Élysées, 75008 Paris, France",
-                                     "rating": 4.5,
-                                     "location": {"lat": 48.8584, "lng": 2.2945},
-                                     "place_id": "ChIJxxx...",
-                                     "types": ["restaurant", "french_restaurant"],
-                                     "price_level": "PRICE_LEVEL_MODERATE",
-                                     "description": "Traditional French bistro with Eiffel Tower views"
-                                 }
-                             ]
-                         }
-                     }
-                 }
-             },
-             422: {
-                 "description": "Validation Error - Invalid parameters provided"
-             },
-             503: {
-                 "description": "External service unavailable"
-             }
-         },
          responses={
              200: {
                  "description": "Search successful",
@@ -227,31 +203,38 @@ async def find_places(
         ge=-180,
         le=180,
         description="Starting point longitude",
-        example=2.2945
+        example=2.2945,
+        title="Longitude",
     ),
     lat: float = Query(
         ...,
         ge=-90,
         le=90,
         description="Starting point latitude",
-        example=48.8584
+        example=48.8584,
+        title="Latitude",
     ),
     minutes: int = Query(
         20,
         ge=1,
         le=60,
         description="Travel time in minutes",
-        example=20
+        example=20,
+        title="Travel Time",
     ),
     type: PlaceType = Query(
         PlaceType.RESTAURANT,
-        description="Type of place to search for",
-        example="restaurant"
+        description="Type of place to search for. Available options: restaurant, cafe, bar, fast_food_restaurant, bakery, any",
+        example="restaurant",
+        title="Place Type",
     ),
     keyword: Optional[str] = Query(
         None,
-        description="Keyword to filter results",
-        example="bistro"
+        description="Optional keyword to filter results (e.g., 'bistro', 'pizza', etc.)",
+        example="bistro",
+        title="Search Keyword",
+        min_length=2,
+        max_length=50
     )
 ):
     """
