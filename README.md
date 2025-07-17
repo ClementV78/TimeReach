@@ -1,3 +1,4 @@
+
 # TimeReach
 
 TimeReach is an API that helps users find places within a specified travel time using isochrones. It combines OpenRouteService for travel time calculations with Google Places API for location discovery.
@@ -5,7 +6,8 @@ TimeReach is an API that helps users find places within a specified travel time 
 ## Features
 
 - Find places within a specified travel time (1-60 minutes)
-- Support for various place types (restaurants, cafes, bars, etc.)
+- Support for various place types (see below for valid types)
+- Use both place type and keyword for precise searches (e.g. type=restaurant & keyword=pizzeria)
 - Integration with ChatGPT for natural language queries
 - Detailed place information including ratings, price levels, and descriptions
 - CORS support for web integration
@@ -52,22 +54,45 @@ The API will be available at `http://localhost:8000`
 
 ## API Documentation
 
-### Endpoints
+### Endpoint
 
-#### GET /restaurants
+#### GET /places
 
 Find places within a specified travel time.
 
 Parameters:
-- `lon` (float): Starting point longitude (-180 to 180)
-- `lat` (float): Starting point latitude (-90 to 90)
+- `location` (string, optional): Name of the starting point (e.g. "Eiffel Tower, Paris")
+- `lat` (float, optional): Latitude (-90 to 90)
+- `lon` (float, optional): Longitude (-180 to 180)
 - `minutes` (int): Travel time in minutes (1 to 60)
-- `type` (string): Place type (restaurant, cafe, bar, fast_food_restaurant, bakery, any)
-- `keyword` (string, optional): Filter results by keyword
+- `type` (string): Place type (see below for valid types)
+- `mode` (string, optional): Transport mode (driving-car, cycling-regular, foot-walking, foot-hiking, etc.)
+- `keyword` (string, optional): Filter results by keyword (e.g. "pizza", "sushi", "vegan")
 
-Example Request:
+### How to use `type` and `keyword`
+
+- **type**: Must be a valid Google Places type (e.g. restaurant, cafe, bar, bakery, museum, park, etc.). See [Google Places Types](https://developers.google.com/maps/documentation/places/web-service/place-types) for the full list.
+- **keyword**: Any free text to refine the search (e.g. "pizzeria", "sushi", "vegan", "bistro").
+- You can use **type** alone, **keyword** alone, or both together for more precise results.
+- If you want a specific kind of place not in the official types (e.g. "pizzeria"), use type=restaurant and keyword=pizzeria.
+
+#### Examples
+
 ```bash
-curl "http://localhost:8000/restaurants?lon=2.3522&lat=48.8566&minutes=20&type=restaurant"
+# Find restaurants within 20 minutes by car
+curl "http://localhost:8000/places?location=Paris&minutes=20&type=restaurant"
+
+# Find pizzerias within 10 minutes by bike (type=restaurant, keyword=pizzeria)
+curl "http://localhost:8000/places?location=Paris&minutes=10&type=restaurant&mode=cycling-regular&keyword=pizzeria"
+
+# Find vegan places within 15 minutes walking
+curl "http://localhost:8000/places?location=Paris&minutes=15&type=restaurant&mode=foot-walking&keyword=vegan"
+
+# Find museums within 30 minutes
+curl "http://localhost:8000/places?location=Paris&minutes=30&type=museum"
+
+# Find any place with keyword only
+curl "http://localhost:8000/places?location=Paris&minutes=20&keyword=bistro"
 ```
 
 Example Response:
@@ -89,26 +114,54 @@ Example Response:
 }
 ```
 
-## ChatGPT Integration
+### Valid Place Types
 
-To use TimeReach with ChatGPT, use the following system prompt:
+Some common valid types:
+
+- restaurant
+- cafe
+- bar
+- bakery
+- museum
+- park
+- tourist_attraction
+- supermarket
+- pharmacy
+- hotel
+- library
+- gym
+- movie_theater
+
+For the full list, see [Google Places Types](https://developers.google.com/maps/documentation/places/web-service/place-types).
+
+## ChatGPT Integration & Best Practices
+
+When integrating with ChatGPT or any assistant:
+
+- Always specify a valid `type` (see above) for best results.
+- Use `keyword` for more precise queries (e.g. "pizzeria", "sushi", "vegan", "bistro").
+- You can use both together: `type=restaurant&keyword=pizzeria`.
+- If the user asks for something not in the official types, map to the closest type and use the keyword.
+- Example: "Trouve-moi des pizzerias à Paris dans les 10 minutes en vélo" → `type=restaurant&keyword=pizzeria&mode=cycling-regular`
+
+### Example ChatGPT Prompt
 
 ```text
 You are an assistant that helps users find interesting places. You have access to the TimeReach API that finds places within a travel time radius.
 
-Endpoint: https://your-render-app.onrender.com/restaurants
+Endpoint: https://your-render-app.onrender.com/places
 
 Parameters:
-- lat, lon: starting point coordinates (-90≤lat≤90, -180≤lon≤180)
+- location (or lat/lon): starting point
 - minutes: travel time (1-60)
-- type: restaurant, cafe, bar, fast_food_restaurant, bakery, any
-- keyword: optional search keyword
+- type: valid Google Places type (see doc)
+- keyword: optional search keyword for more precision
+- mode: transport mode (driving-car, cycling-regular, foot-walking, etc.)
 
-Example: "Find restaurants within 15 minutes of the Eiffel Tower"
-You should:
-1. Get Eiffel Tower coordinates (48.8584, 2.2945)
-2. Call API with coordinates and desired time
-3. Format response in a natural way
+Examples:
+- "Find pizzerias within 10 minutes by bike from Paris"
+- "Find vegan restaurants within 15 minutes walking from the Eiffel Tower"
+- "Find museums within 30 minutes from my hotel"
 ```
 
 ## Deployment

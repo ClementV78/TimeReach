@@ -10,6 +10,18 @@ from typing import Optional, List, Dict, Union
 from config import settings
 from enum import Enum
 from pydantic import BaseModel, Field
+import logging
+from datetime import datetime
+
+# Configuration des logs
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="TimeReach API",
@@ -38,53 +50,76 @@ def custom_openapi():
         openapi_version="3.1.0",
         servers=[{"url": "https://timereach.onrender.com"}],
         description="""
-        TimeReach API - Find Places Within Travel Time
+        # TimeReach API - Find Places Within Travel Time
 
-        This API helps find places that are reachable within a specific travel time from a starting point. 
-        You can search using either a location name or GPS coordinates.
+        This API finds places reachable within a specific travel time from a starting point (address or coordinates).
 
-        Base Endpoint: https://timereach.onrender.com
+        ## Integration with ChatGPT
 
-        Main Parameters:
-           - location: Name of the place (e.g., "Eiffel Tower, Paris")
-           OR
-           - lat: Latitude (-90 to 90)
-           - lon: Longitude (-180 to 180)
-           
-           AND
-           - minutes: Travel time (1-60 minutes)
-           - type: Type of place to search for (e.g., "restaurant", "museum", "park", etc.)
-           - keyword: Optional search term
+        - For most queries, use the `keyword` parameter to describe what you are looking for (e.g., 'pizzeria', 'auberge traditionnelle', 'bistro').
+        - If you know or can deduce the Google Places type (see [Google Place Types](https://developers.google.com/maps/documentation/places/web-service/place-types)), use the `type` parameter as well (e.g., 'restaurant', 'museum', 'park').
+        - Combining `type` and `keyword` increases relevance: `type` restricts results to a category, `keyword` refines the search within that category.
+        - If only `keyword` is provided, the API will search for places matching the text in the specified area.
 
-        3. Common Use Cases:
-           "Find restaurants within 20 minutes of the Eiffel Tower"
-           → /places?location=Eiffel Tower, Paris&minutes=20&type=restaurant
+        ## Supported Parameters
 
-           "Find cafes within 15 minutes of Central Park"
-           → /places?location=Central Park, New York&minutes=15&type=cafe
+        - `location`: Name of the starting place (e.g., "Eiffel Tower, Paris")
+        - `lat`, `lon`: Latitude and longitude (if no location name)
+        - `minutes`: Travel time (1-60 minutes)
+        - `mode`: Transport mode (car, cycling-regular, foot-walking, etc.)
+        - `type`: Google Places type (optional, e.g., 'restaurant', 'museum')
+        - `keyword`: Free text search (optional, e.g., 'pizzeria', 'bistro')
+        - `priceLevels`: Filter by price level (optional, e.g., 'PRICE_LEVEL_MODERATE')
 
-           "Find bakeries near Notre Dame Paris"
-           → /places?location=Notre Dame, Paris&minutes=10&type=bakery
+        ## Example Queries
 
-           "Find traditional inns around Dax"
-           → /places?location=Dax, France&minutes=20&type=auberge&keyword=restaurant
+        - "Find pizzerias within 10 minutes by bike from GiFi Plaisir"
+          → `/places?location=GiFi Plaisir&minutes=10&mode=cycling-regular&type=restaurant&keyword=pizzeria`
 
-        4. Response Format:
-           - average_radius: Reachable distance in meters
-           - places: Array of found locations with:
-             * name: Place name
-             * address: Full address
-             * rating: Rating out of 5
-             * location: {lat, lng}
-             * types: Place categories
-             * price_level: Price category
-             * description: Place description
+        - "Find bakeries near Notre Dame Paris"
+          → `/places?location=Notre Dame, Paris&minutes=10&type=bakery`
 
-        5. Error Handling:
-           - 503: External service unavailable
-           - 422: Invalid parameters
+        - "Find traditional inns around Dax"
+          → `/places?location=Dax, France&minutes=20&keyword=auberge`
 
-        For testing: Try the interactive docs at /docs
+        ## Request Format
+
+        - GET `/places`
+        - Parameters: as described above
+
+        ## Response Format
+
+        ```json
+        {
+          "average_radius": 5000,
+          "places": [
+            {
+              "name": "Le Bistrot Parisien",
+              "address": "12 Avenue des Champs-Élysées, 75008 Paris, France",
+              "rating": 4.5,
+              "location": {"lat": 48.8584, "lng": 2.2945},
+              "place_id": "ChIJxxx...",
+              "types": ["restaurant", "french_restaurant"],
+              "price_level": "PRICE_LEVEL_MODERATE",
+              "description": "Traditional French bistro with Eiffel Tower views"
+            }
+          ]
+        }
+        ```
+
+        ## Error Handling
+
+        - 503: External service unavailable
+        - 422: Invalid parameters
+
+        ## Tips for ChatGPT
+
+        - Always use `keyword` for free text queries or when the type is unknown.
+        - Use `type` if you know the Google Places type for more precise results.
+        - You can combine both for best relevance.
+        - For price filtering, use `priceLevels` (e.g., 'PRICE_LEVEL_MODERATE').
+
+        For testing: Try the interactive docs at `/docs`
         """,
         routes=app.routes,
     )
@@ -124,7 +159,18 @@ app.add_middleware(
     expose_headers=["*"]
 )
 
-# Removed PlaceType enum to allow more flexible place types
+# Enum for transport modes
+class TransportMode(str, Enum):
+    """Available transport modes (OpenRouteService profiles)"""
+    CAR = "driving-car"
+    HGV = "driving-hgv"
+    BIKE = "cycling-regular"
+    ROADBIKE = "cycling-road"
+    MTB = "cycling-mountain"
+    EBIKE = "cycling-electric"
+    WALKING = "foot-walking"
+    HIKING = "foot-hiking"
+    WHEELCHAIR = "wheelchair"
 
 class Location(BaseModel):
     """Geographic coordinates model"""
@@ -228,6 +274,12 @@ async def find_places(
         example=20,
         title="Travel Time",
     ),
+    mode: TransportMode = Query(
+        TransportMode.CAR,
+        description="Mode of transportation",
+        example="car",
+        title="Transport Mode",
+    ),
     type: str = Query(
         "restaurant",
         description="Type of place to search for (e.g., restaurant, museum, park, etc.)",
@@ -253,6 +305,8 @@ async def find_places(
     - Calculates average radius from the isochrone polygon
     - Searches for places using Google Places API
     """
+    # Dump requête utilisateur
+    logger.debug(f"[API Request] location={location}, lat={lat}, lon={lon}, minutes={minutes}, mode={mode}, type={type}, keyword={keyword}")
     # Verify that either location or coordinates are provided
     if location is None and (lat is None or lon is None):
         raise HTTPException(
@@ -260,29 +314,36 @@ async def find_places(
             detail="Either location name or both latitude and longitude must be provided"
         )
 
-    # If location is provided but no coordinates, use Google Geocoding API
+    # ---[ Google Geocoding API ]---
     if location and (lat is None or lon is None):
         geocode_url = "https://maps.googleapis.com/maps/api/geocode/json"
         params = {
             "address": location,
             "key": settings.GOOGLE_API_KEY
         }
-        
+        logger.info("\n==================== [CALL] Google Geocoding API ====================")
+        logger.info(f"Request: address='{location}'")
+        logger.debug(f"[Google Geocoding] Request params: {params}")
         try:
+            start_time = datetime.now()
             geocode_resp = requests.get(geocode_url, params=params)
+            duration = (datetime.now() - start_time).total_seconds()
+            logger.info(f"[Google Geocoding] Response time: {duration:.2f}s")
             geocode_resp.raise_for_status()
             response_data = geocode_resp.json()
-            
+            logger.debug(f"[Google Geocoding] Response JSON: {response_data}")
+            logger.info(f"[Google Geocoding] Status: {response_data.get('status')}")
             if response_data["status"] != "OK":
+                logger.error(f"[Google Geocoding] Error: {response_data['status']}")
                 raise HTTPException(
                     status_code=422,
                     detail=f"Geocoding error: {response_data['status']}"
                 )
-            
             location_data = response_data["results"][0]["geometry"]["location"]
             lat = location_data["lat"]
             lon = location_data["lng"]
-            
+            logger.info(f"[Google Geocoding] Found: lat={lat}, lon={lon}")
+            logger.info("====================================================================\n")
         except requests.RequestException as e:
             error_message = f"Error accessing Google Geocoding API: {str(e)}"
             if hasattr(e, 'response') and e.response is not None:
@@ -291,36 +352,51 @@ async def find_places(
                     error_message += f" - Details: {error_details}"
                 except:
                     error_message += f" - Status: {e.response.status_code}"
+            logger.error(f"[Google Geocoding] Exception: {error_message}")
+            logger.info("====================================================================\n")
             raise HTTPException(status_code=503, detail=error_message)
 
+    # ---[ OpenRouteService Isochrone API ]---
     try:
-        # 1. ORS Isochrone
-        ors_url = "https://api.openrouteservice.org/v2/isochrones/driving-car"
+        ors_url = f"https://api.openrouteservice.org/v2/isochrones/{mode.value}"
         headers = {"Authorization": f"Bearer {settings.ORS_API_KEY}"}
         params = {"locations": f"{lon},{lat}", "range": minutes * 60}
+        logger.info("\n==================== [CALL] OpenRouteService Isochrone API ====================")
+        logger.info(f"Request: mode={mode}, lat={lat}, lon={lon}, minutes={minutes}")
+        logger.debug(f"[ORS Isochrone] Request JSON: {{'locations': [[{lon}, {lat}]], 'range': [{minutes * 60}]}}")
+        start_time = datetime.now()
         response = requests.post(ors_url, headers=headers, json={"locations": [[lon, lat]], "range": [minutes * 60]})
+        duration = (datetime.now() - start_time).total_seconds()
+        logger.info(f"[ORS Isochrone] Response time: {duration:.2f}s")
         response.raise_for_status()
-        poly = shape(response.json()['features'][0]['geometry'])
+        ors_json = response.json()
+        logger.debug(f"[ORS Isochrone] Response JSON: {ors_json}")
+        poly = shape(ors_json['features'][0]['geometry'])
+        logger.info(f"[ORS Isochrone] Polygon received, calculating average radius...")
+        logger.info("==========================================================================\n")
     except requests.RequestException as e:
+        logger.error(f"[ORS Isochrone] Exception: {str(e)}")
+        logger.info("==========================================================================\n")
         raise HTTPException(status_code=503, detail="Error accessing OpenRouteService API")
     # 2. Rayon moyen
     center = Point(lon, lat)
     distances = [geodesic((center.y, center.x), (p[1], p[0])).meters for p in poly.exterior.coords]
     average_radius = int(sum(distances) / len(distances))
     
+    # ---[ Google Places API ]---
     try:
-        # 3. Google Places Nearby (New API)
-        gplaces_url = "https://places.googleapis.com/v1/places:searchNearby"
+        gplaces_url = "https://places.googleapis.com/v1/places:searchText"
         headers = {
             "Content-Type": "application/json",
             "X-Goog-Api-Key": settings.GOOGLE_API_KEY,
             "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.rating,places.location,places.id,places.types,places.priceLevel,places.editorialSummary"
         }
-        
+        # Construction de la requête Text Search
+        text_query = keyword if keyword else type
         places_data = {
-            "includedTypes": [type],  # Use includedTypes for place type filtering
+            "textQuery": text_query,
             "maxResultCount": 20,
-            "locationRestriction": {
+            "locationBias": {
                 "circle": {
                     "center": {
                         "latitude": lat,
@@ -329,43 +405,42 @@ async def find_places(
                     "radius": min(float(average_radius), 50000.0)
                 }
             },
-            "rankPreference": "DISTANCE"
+            "includedType": type,
+            "strictTypeFiltering": True,
+            # "priceLevels": ["PRICE_LEVEL_MODERATE", "PRICE_LEVEL_EXPENSIVE"] # à adapter si paramètre prix
         }
-        
-        if keyword:
-            # Note: keyword filtering will be handled in python as the new API doesn't support keywords directly
-            places_data["maxResultCount"] = 20  # Request max to filter after
-            
+        logger.info("\n==================== [CALL] Google Places Text Search API ====================")
+        logger.info(f"Request: textQuery={text_query}, type={type}, lat={lat}, lon={lon}, radius={average_radius}m")
+        logger.debug(f"[Google Places] Request JSON: {places_data}")
         try:
+            start_time = datetime.now()
             places_resp = requests.post(gplaces_url, headers=headers, json=places_data)
+            duration = (datetime.now() - start_time).total_seconds()
+            logger.info(f"[Google Places] Response time: {duration:.2f}s")
             places_resp.raise_for_status()
             response_data = places_resp.json()
+            logger.debug(f"[Google Places] Response JSON: {response_data}")
+            places_count = len(response_data.get("places", []))
+            logger.info(f"[Google Places] Found {places_count} places matching the criteria")
+            logger.info("==================================================================\n")
         except requests.RequestException as e:
             error_message = f"Error accessing Google Places API: {str(e)}"
             if hasattr(e, 'response') and e.response is not None:
                 try:
                     error_details = e.response.json()
                     error_message += f" - Details: {error_details}"
+                    logger.error(f"[Google Places] Error details: {error_details}")
                 except:
-                    pass
+                    logger.error(f"[Google Places] Error status: {e.response.status_code}")
+            logger.info("==================================================================\n")
             raise HTTPException(status_code=503, detail=error_message)
-        
-        # Filter results if keyword was provided
-        places = response_data.get("places", [])
-        if keyword:
-            keyword = keyword.lower()
-            places = [
-                p for p in places 
-                if keyword in p.get("displayName", {}).get("text", "").lower()
-            ]
-            
         return {
             "average_radius": average_radius,
             "places": [
                 {
                     "name": p.get("displayName", {}).get("text", "Unknown"),
                     "address": p.get("formattedAddress", ""),
-                    "rating": float(p.get("rating", {}).get("rating")) if isinstance(p.get("rating"), dict) and p.get("rating", {}).get("rating") is not None else None,
+                    "rating": float(p.get("rating", {}).get("rating")) if isinstance(p.get("rating"), dict) and p.get("rating", {}).get("rating") is not None else p.get("rating", None),
                     "location": {
                         "lat": float(p.get("location", {}).get("latitude", 0)),
                         "lng": float(p.get("location", {}).get("longitude", 0))
@@ -375,7 +450,7 @@ async def find_places(
                     "price_level": p.get("priceLevel") if p.get("priceLevel") else None,
                     "description": p.get("editorialSummary", {}).get("text") if p.get("editorialSummary") else None
                 }
-                for p in places[:min(len(places), 20)]  # Limit to 20 results
+                for p in response_data.get("places", [])[:20]
             ]
         }
     except requests.RequestException as e:
