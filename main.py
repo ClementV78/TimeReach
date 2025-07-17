@@ -85,10 +85,21 @@ async def root():
 # CORS middleware configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://timereach.onrender.com",
+        "https://chat.openai.com",
+        "*"
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=[
+        "Content-Type",
+        "Authorization",
+        "X-Goog-Api-Key",
+        "X-Goog-FieldMask",
+        "*"
+    ],
+    expose_headers=["*"]
 )
 
 class PlaceType(str, Enum):
@@ -123,6 +134,11 @@ class SearchResponse(BaseModel):
 
 # CORS middleware configuration already applied above
 
+@app.options("/places")
+async def places_options():
+    """Handle OPTIONS requests for CORS"""
+    return {"methods": ["GET", "OPTIONS"]}
+
 @app.get("/places", 
          operation_id="find_places",
          summary="Find places within a reachable area",
@@ -137,14 +153,24 @@ class SearchResponse(BaseModel):
                              "average_radius": 5000,
                              "places": [
                                  {
-                                     "name": "Sample Restaurant",
-                                     "address": "1 Example St, City",
+                                     "name": "Le Bistrot Parisien",
+                                     "address": "12 Avenue des Champs-Élysées, 75008 Paris, France",
                                      "rating": 4.5,
-                                     "location": {"lat": 48.8566, "lng": 2.3522},
-                                     "place_id": "ChIJ...",
-                                     "types": ["restaurant", "food"],
+                                     "location": {"lat": 48.8584, "lng": 2.2945},
+                                     "place_id": "ChIJxxx...",
+                                     "types": ["restaurant", "french_restaurant"],
                                      "price_level": "PRICE_LEVEL_MODERATE",
-                                     "description": "Traditional restaurant..."
+                                     "description": "Traditional French bistro with Eiffel Tower views"
+                                 },
+                                 {
+                                     "name": "Café de Paris",
+                                     "address": "10 Rue de la Paix, 75002 Paris, France",
+                                     "rating": 4.2,
+                                     "location": {"lat": 48.8566, "lng": 2.3522},
+                                     "place_id": "ChIJyyy...",
+                                     "types": ["cafe", "restaurant"],
+                                     "price_level": "PRICE_LEVEL_EXPENSIVE",
+                                     "description": "Historic Parisian café serving French cuisine"
                                  }
                              ]
                          }
