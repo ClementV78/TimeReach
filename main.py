@@ -243,7 +243,6 @@ class SearchResponse(BaseModel):
                  }
              }
          })
-@app.post("/places", tags=["Places"])
 async def find_places(
     location: str = Query(
         None,
@@ -465,9 +464,3 @@ async def find_places(
                 error_message += f" - Status: {e.response.status_code}"
         raise HTTPException(status_code=503, detail=error_message)
 
-# Expose /find_places as GET and POST, just log the call
-@app.get("/find_places", tags=["Places"])
-@app.post("/find_places", tags=["Places"])
-async def log_find_places():
-    logger.info("[LOG] /find_places endpoint called (GET or POST)")
-    return {"message": "find_places endpoint called"}
