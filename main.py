@@ -229,13 +229,14 @@ async def find_places(
         example="restaurant",
         title="Place Type",
     ),
-    keyword: Optional[str] = Query(
-        None,
+    keyword: str = Query(
+        "",
         description="Optional keyword to filter results (e.g., 'bistro', 'pizza', etc.)",
         example="bistro",
         title="Search Keyword",
         min_length=2,
-        max_length=50
+        max_length=50,
+        regex="^[a-zA-Z0-9 ]*$"
     )
 ):
     """
