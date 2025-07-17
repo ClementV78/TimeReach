@@ -243,6 +243,7 @@ class SearchResponse(BaseModel):
                  }
              }
          })
+@app.post("/places", tags=["Places"])
 async def find_places(
     location: str = Query(
         None,
@@ -305,6 +306,7 @@ async def find_places(
     - Calculates average radius from the isochrone polygon
     - Searches for places using Google Places API
     """
+    logger.info(f"[LOG] /places endpoint called (GET or POST)")
     # Dump requête utilisateur
     logger.debug(f"[API Request] location={location}, lat={lat}, lon={lon}, minutes={minutes}, mode={mode}, type={type}, keyword={keyword}")
     # Verify that either location or coordinates are provided
@@ -462,3 +464,10 @@ async def find_places(
             except:
                 error_message += f" - Status: {e.response.status_code}"
         raise HTTPException(status_code=503, detail=error_message)
+
+# Expose /find_places as GET and POST, just log the call
+@app.get("/find_places", tags=["Places"])
+@app.post("/find_places", tags=["Places"])
+async def log_find_places():
+    logger.info("[LOG] /find_places endpoint called (GET or POST)")
+    return {"message": "find_places endpoint called"}
