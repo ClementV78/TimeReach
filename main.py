@@ -1,3 +1,34 @@
+# Endpoint GET /places_test compatible OpenAPI 3.0.3
+
+
+# ...existing code...
+
+# Endpoint GET /places_test compatible OpenAPI 3.0.3
+from fastapi.responses import JSONResponse
+
+# Place this endpoint after app = FastAPI(...)
+
+@app.get("/places_test", tags=["Places"], summary="Test endpoint for OpenAPI 3.0.3 compatibility", description="Returns a static example response compatible with OpenAPI 3.0.3.")
+async def places_test():
+    """
+    Test endpoint for OpenAPI 3.0.3 compatibility. Returns a static response.
+    """
+    example_response = {
+        "average_radius": 5000,
+        "places": [
+            {
+                "name": "Le Bistrot Parisien",
+                "address": "12 Avenue des Champs-Élysées, 75008 Paris, France",
+                "rating": 4.5,
+                "location": {"lat": 48.8584, "lng": 2.2945},
+                "place_id": "ChIJxxx...",
+                "types": ["restaurant", "french_restaurant"],
+                "price_level": "PRICE_LEVEL_MODERATE",
+                "description": "Traditional French bistro with Eiffel Tower views"
+            }
+        ]
+    }
+    return JSONResponse(content=example_response)
 # main.py
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
