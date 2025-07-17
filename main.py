@@ -15,7 +15,7 @@ app = FastAPI(
     title="TimeReach API",
     description="Find places within travel time using isochrones",
     version="1.0.0",
-    openapi_version="3.0.0",
+    openapi_version="3.1.0",
     openapi_tags=[{
         "name": "Places",
         "description": "Operations for finding places within travel time"
@@ -35,33 +35,39 @@ def custom_openapi():
     openapi_schema = get_openapi(
         title="TimeReach API",
         version="1.0.0",
-        openapi_version="3.0.0",
+        openapi_version="3.1.0",
         servers=[{"url": "https://timereach.onrender.com"}],
         description="""
-        🌍 TimeReach API - Find Places Within Travel Time
+        TimeReach API - Find Places Within Travel Time
 
-        This API helps find places (restaurants, cafes, bars, etc.) that are reachable within a specific travel time from a starting point. It uses isochrones to determine the reachable area and then searches for places within that area.
+        This API helps find places that are reachable within a specific travel time from a starting point. 
+        You can search using either a location name or GPS coordinates.
 
-        🤖 ChatGPT Integration Guide:
+        Base Endpoint: https://timereach.onrender.com
 
-        1. Base Endpoint: https://timereach.onrender.com
-
-        2. Main Parameters:
+        Main Parameters:
+           - location: Name of the place (e.g., "Eiffel Tower, Paris")
+           OR
            - lat: Latitude (-90 to 90)
            - lon: Longitude (-180 to 180)
+           
+           AND
            - minutes: Travel time (1-60 minutes)
-           - type: Place type (restaurant, cafe, bar, fast_food_restaurant, bakery, any)
+           - type: Type of place to search for (e.g., "restaurant", "museum", "park", etc.)
            - keyword: Optional search term
 
         3. Common Use Cases:
            "Find restaurants within 20 minutes of the Eiffel Tower"
-           → /places?lat=48.8584&lon=2.2945&minutes=20
+           → /places?location=Eiffel Tower, Paris&minutes=20&type=restaurant
 
            "Find cafes within 15 minutes of Central Park"
-           → /places?lat=40.7829&lon=-73.9654&minutes=15&type=cafe
+           → /places?location=Central Park, New York&minutes=15&type=cafe
 
            "Find bakeries near Notre Dame Paris"
-           → /places?lat=48.8529&lon=2.3499&minutes=10&type=bakery
+           → /places?location=Notre Dame, Paris&minutes=10&type=bakery
+
+           "Find traditional inns around Dax"
+           → /places?location=Dax, France&minutes=20&type=auberge&keyword=restaurant
 
         4. Response Format:
            - average_radius: Reachable distance in meters
@@ -118,14 +124,7 @@ app.add_middleware(
     expose_headers=["*"]
 )
 
-class PlaceType(str, Enum):
-    """Place types supported by the API"""
-    RESTAURANT = "restaurant"
-    CAFE = "cafe"
-    BAR = "bar"
-    FAST_FOOD = "fast_food_restaurant"
-    BAKERY = "bakery"
-    ANY = "any"
+# Removed PlaceType enum to allow more flexible place types
 
 class Location(BaseModel):
     """Geographic coordinates model"""
@@ -199,19 +198,25 @@ class SearchResponse(BaseModel):
              }
          })
 async def find_places(
+    location: str = Query(
+        None,
+        description="Name of the location (e.g., 'Eiffel Tower, Paris')",
+        example="Eiffel Tower, Paris",
+        title="Location Name",
+    ),
     lon: float = Query(
-        ...,
+        None,
         ge=-180,
         le=180,
-        description="Starting point longitude",
+        description="Starting point longitude (optional if location is provided)",
         example=2.2945,
         title="Longitude",
     ),
     lat: float = Query(
-        ...,
+        None,
         ge=-90,
         le=90,
-        description="Starting point latitude",
+        description="Starting point latitude (optional if location is provided)",
         example=48.8584,
         title="Latitude",
     ),
@@ -223,11 +228,13 @@ async def find_places(
         example=20,
         title="Travel Time",
     ),
-    type: PlaceType = Query(
-        PlaceType.RESTAURANT,
-        description="Type of place to search for. Available options: restaurant, cafe, bar, fast_food_restaurant, bakery, any",
+    type: str = Query(
+        "restaurant",
+        description="Type of place to search for (e.g., restaurant, museum, park, etc.)",
         example="restaurant",
         title="Place Type",
+        min_length=2,
+        max_length=50
     ),
     keyword: str = Query(
         "",
@@ -246,6 +253,35 @@ async def find_places(
     - Calculates average radius from the isochrone polygon
     - Searches for places using Google Places API
     """
+    # Verify that either location or coordinates are provided
+    if location is None and (lat is None or lon is None):
+        raise HTTPException(
+            status_code=422,
+            detail="Either location name or both latitude and longitude must be provided"
+        )
+
+    # If location is provided but no coordinates, use Google Geocoding API
+    if location and (lat is None or lon is None):
+        try:
+            geocode_url = "https://places.googleapis.com/v1/places:searchText"
+            headers = {
+                "Content-Type": "application/json",
+                "X-Goog-Api-Key": settings.GOOGLE_API_KEY,
+                "X-Goog-FieldMask": "places.location"
+            }
+            geocode_data = {"textQuery": location}
+            geocode_resp = requests.post(geocode_url, headers=headers, json=geocode_data)
+            geocode_resp.raise_for_status()
+            
+            place_data = geocode_resp.json().get("places", [])
+            if not place_data:
+                raise HTTPException(status_code=422, detail="Location not found")
+            
+            lat = place_data[0]["location"]["latitude"]
+            lon = place_data[0]["location"]["longitude"]
+        except requests.RequestException as e:
+            raise HTTPException(status_code=503, detail="Error accessing Google Geocoding API")
+
     try:
         # 1. ORS Isochrone
         ors_url = "https://api.openrouteservice.org/v2/isochrones/driving-car"
@@ -271,7 +307,7 @@ async def find_places(
         }
         
         places_data = {
-            "includedTypes": [type] if type != "any" else [],
+            "textQuery": type,  # Use textQuery instead of includedTypes for more flexibility
             "maxResultCount": 20,
             "locationRestriction": {
                 "circle": {
