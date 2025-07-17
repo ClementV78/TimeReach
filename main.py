@@ -27,7 +27,7 @@ app = FastAPI(
     title="TimeReach API",
     description="Find places within travel time using isochrones",
     version="1.0.0",
-    openapi_version="3.1.0",
+    openapi_version="3.0.3",
     openapi_tags=[{
         "name": "Places",
         "description": "Operations for finding places within travel time"
@@ -47,7 +47,7 @@ def custom_openapi():
     openapi_schema = get_openapi(
         title="TimeReach API",
         version="1.0.0",
-        openapi_version="3.1.0",
+        openapi_version="3.0.3",
         servers=[{"url": "https://timereach.onrender.com"}],
         description="""
         # TimeReach API - Find Places Within Travel Time
