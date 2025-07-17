@@ -135,12 +135,12 @@ class Place(BaseModel):
     """Place model"""
     name: str = Field(..., description="Place name")
     address: str = Field("", description="Formatted address")
-    rating: float = Field(0.0, description="Average rating out of 5")
+    rating: Optional[float] = Field(None, description="Average rating out of 5")
     location: Location = Field(..., description="Geographic coordinates")
     place_id: str = Field(..., description="Unique Google Places identifier")
     types: List[str] = Field(default_factory=list, description="Place types")
-    price_level: str = Field("", description="Price level")
-    description: str = Field("", description="Editorial description")
+    price_level: Optional[str] = Field(None, description="Price level")
+    description: Optional[str] = Field(None, description="Editorial description")
 
 class SearchResponse(BaseModel):
     """API response model"""
@@ -236,8 +236,8 @@ async def find_places(
         min_length=2,
         max_length=50
     ),
-    keyword: str = Query(
-        "",
+    keyword: Optional[str] = Query(
+        None,
         description="Optional keyword to filter results (e.g., 'bistro', 'pizza', etc.)",
         example="bistro",
         title="Search Keyword",
@@ -262,25 +262,36 @@ async def find_places(
 
     # If location is provided but no coordinates, use Google Geocoding API
     if location and (lat is None or lon is None):
+        geocode_url = "https://maps.googleapis.com/maps/api/geocode/json"
+        params = {
+            "address": location,
+            "key": settings.GOOGLE_API_KEY
+        }
+        
         try:
-            geocode_url = "https://places.googleapis.com/v1/places:searchText"
-            headers = {
-                "Content-Type": "application/json",
-                "X-Goog-Api-Key": settings.GOOGLE_API_KEY,
-                "X-Goog-FieldMask": "places.location"
-            }
-            geocode_data = {"textQuery": location}
-            geocode_resp = requests.post(geocode_url, headers=headers, json=geocode_data)
+            geocode_resp = requests.get(geocode_url, params=params)
             geocode_resp.raise_for_status()
+            response_data = geocode_resp.json()
             
-            place_data = geocode_resp.json().get("places", [])
-            if not place_data:
-                raise HTTPException(status_code=422, detail="Location not found")
+            if response_data["status"] != "OK":
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Geocoding error: {response_data['status']}"
+                )
             
-            lat = place_data[0]["location"]["latitude"]
-            lon = place_data[0]["location"]["longitude"]
+            location_data = response_data["results"][0]["geometry"]["location"]
+            lat = location_data["lat"]
+            lon = location_data["lng"]
+            
         except requests.RequestException as e:
-            raise HTTPException(status_code=503, detail="Error accessing Google Geocoding API")
+            error_message = f"Error accessing Google Geocoding API: {str(e)}"
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_details = e.response.json()
+                    error_message += f" - Details: {error_details}"
+                except:
+                    error_message += f" - Status: {e.response.status_code}"
+            raise HTTPException(status_code=503, detail=error_message)
 
     try:
         # 1. ORS Isochrone
@@ -307,7 +318,7 @@ async def find_places(
         }
         
         places_data = {
-            "textQuery": type,  # Use textQuery instead of includedTypes for more flexibility
+            "includedTypes": [type],  # Use includedTypes for place type filtering
             "maxResultCount": 20,
             "locationRestriction": {
                 "circle": {
@@ -325,9 +336,19 @@ async def find_places(
             # Note: keyword filtering will be handled in python as the new API doesn't support keywords directly
             places_data["maxResultCount"] = 20  # Request max to filter after
             
-        places_resp = requests.post(gplaces_url, headers=headers, json=places_data)
-        places_resp.raise_for_status()
-        response_data = places_resp.json()
+        try:
+            places_resp = requests.post(gplaces_url, headers=headers, json=places_data)
+            places_resp.raise_for_status()
+            response_data = places_resp.json()
+        except requests.RequestException as e:
+            error_message = f"Error accessing Google Places API: {str(e)}"
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_details = e.response.json()
+                    error_message += f" - Details: {error_details}"
+                except:
+                    pass
+            raise HTTPException(status_code=503, detail=error_message)
         
         # Filter results if keyword was provided
         places = response_data.get("places", [])
@@ -342,23 +363,27 @@ async def find_places(
             "average_radius": average_radius,
             "places": [
                 {
-                    "name": p.get("displayName", {}).get("text"),
-                    "address": p.get("formattedAddress"),
-                    "rating": p.get("rating", {}).get("rating") if isinstance(p.get("rating"), dict) else p.get("rating"),
+                    "name": p.get("displayName", {}).get("text", "Unknown"),
+                    "address": p.get("formattedAddress", ""),
+                    "rating": float(p.get("rating", {}).get("rating")) if isinstance(p.get("rating"), dict) and p.get("rating", {}).get("rating") is not None else None,
                     "location": {
-                        "lat": p.get("location", {}).get("latitude"),
-                        "lng": p.get("location", {}).get("longitude")
+                        "lat": float(p.get("location", {}).get("latitude", 0)),
+                        "lng": float(p.get("location", {}).get("longitude", 0))
                     },
-                    "place_id": p.get("id"),
+                    "place_id": p.get("id", ""),
                     "types": p.get("types", []),
-                    "price_level": p.get("priceLevel"),
-                    "description": p.get("editorialSummary", {}).get("text")
+                    "price_level": p.get("priceLevel") if p.get("priceLevel") else None,
+                    "description": p.get("editorialSummary", {}).get("text") if p.get("editorialSummary") else None
                 }
                 for p in places[:min(len(places), 20)]  # Limit to 20 results
             ]
         }
     except requests.RequestException as e:
-        raise HTTPException(
-            status_code=503,
-            detail="Error accessing Google Places API"
-        )
+        error_message = "Error accessing Google Places API"
+        if hasattr(e, 'response') and e.response is not None:
+            try:
+                error_details = e.response.json()
+                error_message += f" - Details: {error_details}"
+            except:
+                error_message += f" - Status: {e.response.status_code}"
+        raise HTTPException(status_code=503, detail=error_message)
