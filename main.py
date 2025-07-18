@@ -17,21 +17,33 @@ from datetime import datetime
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()
 numeric_level = getattr(logging, LOG_LEVEL, logging.INFO)
 
-logging.basicConfig(
-    level=numeric_level,
-    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-    handlers=[
-        logging.StreamHandler()
-    ],
-    force=True  # Force la reconfiguration même si déjà configuré
-)
+# Configuration avancée pour contourner uvicorn
+def setup_logging():
+    """Configuration du logging qui persiste même avec uvicorn"""
+    # Configuration du format
+    formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s')
+    
+    # Configuration du handler console
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(numeric_level)
+    console_handler.setFormatter(formatter)
+    
+    # Configuration du root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(numeric_level)
+    
+    # Nettoyer les handlers existants et ajouter le nôtre
+    root_logger.handlers.clear()
+    root_logger.addHandler(console_handler)
+    
+    # Configuration de notre logger spécifique
+    logger = logging.getLogger(__name__)
+    logger.setLevel(numeric_level)
+    
+    return logger
 
-# Configuration explicite du logger root et de notre logger
-root_logger = logging.getLogger()
-root_logger.setLevel(numeric_level)
-
-logger = logging.getLogger(__name__)
-logger.setLevel(numeric_level)
+# Appel de la configuration
+logger = setup_logging()
 
 # Log de démarrage
 logger.info(f"� [STARTUP] TimeReach API - Logging configuré en mode {LOG_LEVEL}")
@@ -54,6 +66,22 @@ app = FastAPI(
     },
     swagger_ui_parameters={"defaultModelsExpandDepth": -1}
 )
+
+# Event handler pour reconfigurer le logging au démarrage de l'app
+@app.on_event("startup")
+async def configure_logging_on_startup():
+    """Reconfigure le logging au démarrage pour s'assurer que DEBUG fonctionne"""
+    LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()
+    numeric_level = getattr(logging, LOG_LEVEL, logging.INFO)
+    
+    # Reconfiguration forcée
+    setup_logging()
+    
+    logger = logging.getLogger(__name__)
+    logger.info(f"🔄 [STARTUP] Logging reconfiguré en mode {LOG_LEVEL}")
+    if LOG_LEVEL == 'DEBUG':
+        logger.debug("🔧 [STARTUP] Debug logging is working after startup!")
+        logger.debug("🔧 [STARTUP] Cette ligne ne devrait apparaître qu'en mode DEBUG")
 
 # Vérification du niveau de logging au démarrage
 logger.info(f"🔍 [CONFIG] Current logging level: {LOG_LEVEL} ({logging.getLevelName(logger.level)})")
