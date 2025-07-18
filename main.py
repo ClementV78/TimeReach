@@ -120,13 +120,28 @@ def custom_openapi():
         ## Example Queries
 
         - "Find pizzerias within 10 minutes by bike from GiFi Plaisir"
-          → `/places?location=GiFi Plaisir&minutes=10&mode=cycling-regular&type=restaurant&keyword=pizzeria`
+          → `/places?location=GiFi Plaisir&minutes=10&mode=bike&type=restaurant&keyword=pizzeria`
 
-        - "Find bakeries near Notre Dame Paris"
-          → `/places?location=Notre Dame, Paris&minutes=10&type=bakery`
+        - "Find bakeries near Notre Dame Paris by walking"
+          → `/places?location=Notre Dame, Paris&minutes=10&mode=walk&type=bakery`
 
-        - "Find traditional inns around Dax"
-          → `/places?location=Dax, France&minutes=20&keyword=auberge`
+        - "Find traditional inns around Dax by car"
+          → `/places?location=Dax, France&minutes=20&mode=car&keyword=auberge`
+
+        ## Transport Modes
+
+        **ChatGPT should use these simple values:**
+        - `car` or `driving` → For car travel
+        - `bike` or `cycling` → For bicycle travel  
+        - `walk` or `walking` → For walking
+
+        **Advanced modes available:**
+        - `ebike` → Electric bicycle
+        - `truck` → Heavy goods vehicle
+        - `cycling-road` → Road bicycle (faster)
+        - `cycling-mountain` → Mountain bike
+        - `foot-hiking` → Hiking/trails
+        - `wheelchair` → Wheelchair accessible routes
 
         ## Request Format
 
@@ -227,18 +242,58 @@ app.add_middleware(
     expose_headers=["*"]
 )
 
-# Enum for transport modes
-class TransportMode(str, Enum):
-    """Available transport modes (OpenRouteService profiles)"""
-    CAR = "driving-car"
-    HGV = "driving-hgv"
-    BIKE = "cycling-regular"
-    ROADBIKE = "cycling-road"
-    MTB = "cycling-mountain"
-    EBIKE = "cycling-electric"
-    WALKING = "foot-walking"
-    HIKING = "foot-hiking"
-    WHEELCHAIR = "wheelchair"
+# Mapping des modes de transport pour conversion
+TRANSPORT_MODE_MAPPING = {
+    # Valeurs principales OpenRouteService
+    "driving-car": "driving-car",
+    "driving-hgv": "driving-hgv", 
+    "cycling-regular": "cycling-regular",
+    "cycling-road": "cycling-road",
+    "cycling-mountain": "cycling-mountain",
+    "cycling-electric": "cycling-electric",
+    "foot-walking": "foot-walking",
+    "foot-hiking": "foot-hiking",
+    "wheelchair": "wheelchair",
+    
+    # Alias courants pour ChatGPT et utilisateurs
+    "car": "driving-car",
+    "driving": "driving-car",
+    "auto": "driving-car",
+    "voiture": "driving-car",
+    
+    "bike": "cycling-regular",
+    "bicycle": "cycling-regular",
+    "cycling": "cycling-regular",
+    "velo": "cycling-regular",
+    "vélo": "cycling-regular",
+    
+    "walk": "foot-walking",
+    "walking": "foot-walking",
+    "foot": "foot-walking",
+    "marche": "foot-walking",
+    "pied": "foot-walking",
+    
+    "ebike": "cycling-electric",
+    "electric-bike": "cycling-electric",
+    "vae": "cycling-electric",
+    
+    "truck": "driving-hgv",
+    "camion": "driving-hgv",
+}
+
+def validate_transport_mode(mode: str) -> str:
+    """Valide et convertit le mode de transport"""
+    mode_lower = mode.lower().strip()
+    
+    if mode_lower in TRANSPORT_MODE_MAPPING:
+        return TRANSPORT_MODE_MAPPING[mode_lower]
+    
+    # Si pas trouvé, proposer des suggestions
+    available_modes = list(TRANSPORT_MODE_MAPPING.keys())
+    raise HTTPException(
+        status_code=422,
+        detail=f"Mode de transport '{mode}' non reconnu. Modes disponibles: {', '.join(available_modes[:10])}... Utilisez 'car', 'bike', 'walk' pour les plus courants."
+    )
 
 class Location(BaseModel):
     """Geographic coordinates model"""
@@ -330,11 +385,17 @@ async def find_places(
         example=20,
         title="Travel Time",
     ),
-    #mode: TransportMode = Query(
     mode: str = Query(
-        #TransportMode.CAR,
-        "driving-car",
-        description="Mode of transportation",
+        "car",
+        description="""Mode of transportation. Available options:
+        - 'car', 'driving', 'auto' → Car/driving
+        - 'bike', 'bicycle', 'cycling' → Regular bicycle  
+        - 'walk', 'walking', 'foot' → Walking
+        - 'ebike', 'electric-bike' → Electric bicycle
+        - 'truck', 'camion' → Heavy goods vehicle
+        - Advanced: 'cycling-road', 'cycling-mountain', 'foot-hiking', 'wheelchair'
+        
+        ChatGPT: Use 'car', 'bike', or 'walk' for most queries.""",
         example="car",
         title="Transport Mode",
     ),
@@ -365,6 +426,16 @@ async def find_places(
     logger.info(f"[LOG] /places endpoint called (GET)")
     # Dump requête utilisateur
     logger.debug(f"[API Request] location={location}, lat={lat}, lon={lon}, minutes={minutes}, mode={mode}, type={type}, keyword={keyword}")
+    
+    # Validation et conversion du mode de transport
+    try:
+        validated_mode = validate_transport_mode(mode)
+        if validated_mode != mode:
+            logger.info(f"[MODE] Converted '{mode}' → '{validated_mode}'")
+    except HTTPException as e:
+        logger.error(f"[MODE] Invalid transport mode: {mode}")
+        raise e
+    
     # Verify that either location or coordinates are provided
     if location is None and (lat is None or lon is None):
         raise HTTPException(
@@ -416,11 +487,11 @@ async def find_places(
 
     # ---[ OpenRouteService Isochrone API ]---
     try:
-        ors_url = f"https://api.openrouteservice.org/v2/isochrones/{mode}"
+        ors_url = f"https://api.openrouteservice.org/v2/isochrones/{validated_mode}"
         headers = {"Authorization": f"Bearer {settings.ORS_API_KEY}"}
         params = {"locations": f"{lon},{lat}", "range": minutes * 60}
         logger.info("\n==================== [CALL] OpenRouteService Isochrone API ====================")
-        logger.info(f"Request: mode={mode}, lat={lat}, lon={lon}, minutes={minutes}")
+        logger.info(f"Request: mode={mode}→{validated_mode}, lat={lat}, lon={lon}, minutes={minutes}")
         logger.debug(f"[ORS Isochrone] Request JSON: {{'locations': [[{lon}, {lat}]], 'range': [{minutes * 60}]}}")
         start_time = datetime.now()
         response = requests.post(ors_url, headers=headers, json={"locations": [[lon, lat]], "range": [minutes * 60]})
@@ -433,9 +504,21 @@ async def find_places(
         logger.info(f"[ORS Isochrone] Polygon received, calculating average radius...")
         logger.info("==========================================================================\n")
     except requests.RequestException as e:
-        logger.error(f"[ORS Isochrone] Exception: {str(e)}")
+        error_details = f"Mode: {mode}→{validated_mode}, Location: {lat},{lon}, Minutes: {minutes}"
+        logger.error(f"[ORS Isochrone] Exception: {str(e)} | {error_details}")
+        
+        if hasattr(e, 'response') and e.response is not None:
+            try:
+                ors_error = e.response.json()
+                logger.error(f"[ORS Isochrone] Error response: {ors_error}")
+                error_message = f"OpenRouteService error: {ors_error.get('error', {}).get('message', str(e))}"
+            except:
+                error_message = f"OpenRouteService error (HTTP {e.response.status_code}): {str(e)}"
+        else:
+            error_message = f"OpenRouteService connection error: {str(e)}"
+            
         logger.info("==========================================================================\n")
-        raise HTTPException(status_code=503, detail="Error accessing OpenRouteService API")
+        raise HTTPException(status_code=503, detail=f"{error_message} | Parameters: {error_details}")
     
     # 2. Rayon moyen
     center = Point(lon, lat)
