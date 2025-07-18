@@ -10,17 +10,33 @@ from config import settings
 from enum import Enum
 from pydantic import BaseModel, Field
 import logging
+import os
 from datetime import datetime
 
-# Configuration des logs
+# Configuration des logs avec variable d'environnement
+LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()
+numeric_level = getattr(logging, LOG_LEVEL, logging.INFO)
+
 logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s [%(levelname)s] %(message)s',
+    level=numeric_level,
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
     handlers=[
         logging.StreamHandler()
-    ]
+    ],
+    force=True  # Force la reconfiguration même si déjà configuré
 )
+
+# Configuration explicite du logger root et de notre logger
+root_logger = logging.getLogger()
+root_logger.setLevel(numeric_level)
+
 logger = logging.getLogger(__name__)
+logger.setLevel(numeric_level)
+
+# Log de démarrage
+logger.info(f"� [STARTUP] TimeReach API - Logging configuré en mode {LOG_LEVEL}")
+if LOG_LEVEL == 'DEBUG':
+    logger.debug("� [STARTUP] Debug logging activé - mode détaillé")
 
 app = FastAPI(
     title="TimeReach API",
@@ -38,6 +54,13 @@ app = FastAPI(
     },
     swagger_ui_parameters={"defaultModelsExpandDepth": -1}
 )
+
+# Vérification du niveau de logging au démarrage
+logger.info(f"🔍 [CONFIG] Current logging level: {LOG_LEVEL} ({logging.getLevelName(logger.level)})")
+logger.info(f"🔍 [CONFIG] Root logger level: {logging.getLevelName(logging.getLogger().level)}")
+if LOG_LEVEL == 'DEBUG':
+    logger.debug("🔧 [CONFIG] Si vous voyez ce message, DEBUG fonctionne !")
+logger.info(f"🌍 [CONFIG] Pour activer DEBUG: export LOG_LEVEL=DEBUG")
 
 def custom_openapi():
     """Customize OpenAPI documentation for ChatGPT"""
