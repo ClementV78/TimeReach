@@ -50,6 +50,7 @@ logger.info(f"� [STARTUP] TimeReach API - Logging configuré en mode {LOG_LEVE
 if LOG_LEVEL == 'DEBUG':
     logger.debug("� [STARTUP] Debug logging activé - mode détaillé")
 
+# Création de l'application FastAPI
 app = FastAPI(
     title="TimeReach API",
     description="Find places within travel time using isochrones",
@@ -68,20 +69,15 @@ app = FastAPI(
 )
 
 # Event handler pour reconfigurer le logging au démarrage de l'app
-@app.on_event("startup")
-async def configure_logging_on_startup():
-    """Reconfigure le logging au démarrage pour s'assurer que DEBUG fonctionne"""
-    LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()
-    numeric_level = getattr(logging, LOG_LEVEL, logging.INFO)
-    
-    # Reconfiguration forcée
-    setup_logging()
-    
-    logger = logging.getLogger(__name__)
-    logger.info(f"🔄 [STARTUP] Logging reconfiguré en mode {LOG_LEVEL}")
-    if LOG_LEVEL == 'DEBUG':
-        logger.debug("🔧 [STARTUP] Debug logging is working after startup!")
-        logger.debug("🔧 [STARTUP] Cette ligne ne devrait apparaître qu'en mode DEBUG")
+# (Removed unexpected indentation and duplicate setup_logging call)
+
+@app.middleware("http")
+async def log_all_requests(request, call_next):
+    logger.info(f"📥 [HTTP] Reçu: {request.method} {request.url}")
+    response = await call_next(request)
+    return response
+
+
 
 # Vérification du niveau de logging au démarrage
 logger.info(f"🔍 [CONFIG] Current logging level: {LOG_LEVEL} ({logging.getLevelName(logger.level)})")
@@ -334,8 +330,10 @@ async def find_places(
         example=20,
         title="Travel Time",
     ),
-    mode: TransportMode = Query(
-        TransportMode.CAR,
+    #mode: TransportMode = Query(
+    mode: str = Query(
+        #TransportMode.CAR,
+        "driving-car",
         description="Mode of transportation",
         example="car",
         title="Transport Mode",
@@ -418,7 +416,7 @@ async def find_places(
 
     # ---[ OpenRouteService Isochrone API ]---
     try:
-        ors_url = f"https://api.openrouteservice.org/v2/isochrones/{mode.value}"
+        ors_url = f"https://api.openrouteservice.org/v2/isochrones/{mode}"
         headers = {"Authorization": f"Bearer {settings.ORS_API_KEY}"}
         params = {"locations": f"{lon},{lat}", "range": minutes * 60}
         logger.info("\n==================== [CALL] OpenRouteService Isochrone API ====================")
